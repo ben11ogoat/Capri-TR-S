@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#120e24">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Capri</title>
+<style>
+:root{--bg:#120e24;--panel:#1c1736;--line:#3a3166;--ink:#f3eefc;--dim:#a79fc7;--hot:#ff3d8b;--volt:#ffe14a;--me:#2b2352;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 "Trebuchet MS","Segoe UI",system-ui,sans-serif;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);overflow:hidden}
+header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px}
+header b{font-size:1.1rem;letter-spacing:.04em}
+header b::before{content:"\26A1";color:var(--volt);margin-right:6px}
+.hb{display:flex;gap:8px}
+button{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-height:44px;cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--volt);outline-offset:2px}
+button.on{background:var(--hot);border-color:var(--hot)}
+#stage{position:relative;flex:0 0 34vh;min-height:190px;display:flex;justify-content:center;align-items:flex-end;background:radial-gradient(ellipse at 50% 85%,#3b2a72 0,transparent 65%)}
+#av{position:relative;height:100%;aspect-ratio:1}
+#av img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none}
+#av img.v{display:block}
+#bub{position:absolute;left:12px;right:12px;top:4px;text-align:center;font-size:.9rem;color:var(--dim);min-height:1.4em}
+#log{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px;scroll-behavior:smooth}
+.m{max-width:86%;padding:9px 13px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.m.c{align-self:flex-start;background:var(--panel);border:1px solid var(--line);border-bottom-left-radius:4px}
+.m.u{align-self:flex-end;background:var(--me);border-bottom-right-radius:4px}
+.m.e{align-self:center;color:var(--hot);font-size:.88rem}
+form{display:flex;gap:8px;padding:8px 12px 12px}
+textarea{flex:1;resize:none;height:46px;max-height:120px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:11px 12px;font:inherit}
+#send{background:var(--volt);color:#1a1230;border-color:var(--volt);font-weight:700}
+dialog{width:min(92vw,460px);max-height:88vh;overflow:auto;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:16px}
+dialog::backdrop{background:#000a}
+label{display:block;margin:10px 0 4px;color:var(--dim);font-size:.9rem}
+dialog input,dialog select,dialog textarea.f{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;height:auto}
+dialog textarea.f{min-height:90px}
+.row{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.note{font-size:.82rem;color:var(--dim);margin:6px 0 0}
+@media (prefers-reduced-motion:reduce){#log{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header><b>Capri</b><div class="hb"><button id="mic" aria-label="Microfone">Falar</button><button id="spk" aria-label="Voz da Capri">Voz</button><button id="cfg" aria-label="Configurações">Ajustes</button></div></header>
+<div id="stage"><div id="bub"></div><div id="av"></div></div>
+<div id="log" aria-live="polite"></div>
+<form id="f"><textarea id="t" rows="1" placeholder="Escreva para a Capri" aria-label="Mensagem"></textarea><button id="send" type="submit">Enviar</button></form>
+
+<dialog id="d">
+<h2 style="margin:0 0 4px;font-size:1.1rem">Ajustes</h2>
+<p class="note">A chave fica só neste aparelho. Funciona com qualquer API compatível com OpenAI (OpenRouter, Groq, Gemini via endpoint OpenAI, Ollama no seu PC etc.).</p>
+<label for="u">Endereço da API</label><input id="u" inputmode="url" placeholder="https://openrouter.ai/api/v1">
+<label for="k">Chave da API</label><input id="k" type="password" autocomplete="off">
+<label for="mo">Modelo</label><input id="mo" placeholder="ex.: meta-llama/llama-3.3-70b-instruct:free">
+<label for="p">Personalidade</label><textarea id="p" class="f"></textarea>
+<label for="mem">Memória (um fato por linha)</label><textarea id="mem" class="f" placeholder="Meu negócio é de impressão 3D"></textarea>
+<div class="row"><button id="clr" type="button">Limpar conversa</button><button id="ok" type="button" class="on">Salvar</button></div>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s),LS=localStorage;
+const PERS="Você é a Capri, uma companheira de IA carismática, direta e leal, com um toque de atitude. Responda no idioma do usuário, em frases curtas e naturais, sem listas longas. Se não souber, diga. Não finja ter feito ações no aparelho que você não pode fazer.";
+const S=JSON.parse(LS.capri_cfg||"{}");Object.assign(S,{p:S.p||PERS,mem:S.mem||""});
+let hist=JSON.parse(LS.capri_hist||"[]"),speak=LS.capri_spk!=="0",busy=false;
+const save=()=>{LS.capri_cfg=JSON.stringify(S);LS.capri_hist=JSON.stringify(hist.slice(-60))};
+// avatar
+const FR=["attentive","happy","sad","surprised","thinking","smirk","laughing","sleepy","annoyed","embarrassed","blink_closed","mouth_small","mouth_wide","mouth_round"],av=$("#av"),im={};
+FR.forEach(n=>{const i=new Image();i.src="img/"+n+".webp";i.alt="";av.append(i);im[n]=i});
+let mood="attentive",mouth=null,blink=false;
+function draw(){const n=mouth||(blink?"blink_closed":mood);for(const k in im)im[k].classList.toggle("v",k===n)}
+function setMood(m){mood=im[m]?m:"attentive";draw()}
+(function loop(){setTimeout(()=>{if(!mouth){blink=true;draw();setTimeout(()=>{blink=false;draw()},130)}loop()},2500+Math.random()*3000)})();
+const MOODS=[[/😂|haha|kkk|rs{2,}|engraçad/i,"laughing"],[/😊|feliz|ótim|legal|parabéns|adoro|amei|great|glad/i,"happy"],[/triste|sinto muito|lamento|sorry|desculp/i,"sad"],[/uau|nossa|sério\?|wow|incrível/i,"surprised"],[/hmm|talvez|pensar|depende|let me think/i,"thinking"],[/😏|claro que|óbvio|ora,|ah é/i,"smirk"],[/cansad|sono|dormir/i,"sleepy"],[/chato|irrit|não gosto|droga/i,"annoyed"],[/\?\s*$/,"attentive"]];
+const moodOf=t=>(MOODS.find(([r])=>r.test(t))||[0,"happy"])[1];
+// fala
+let vz=null;const pickV=()=>{const v=speechSynthesis.getVoices();vz=v.find(x=>/pt-BR/i.test(x.lang)&&/female|feminina|maria|luciana|francisca/i.test(x.name))||v.find(x=>/pt-BR/i.test(x.lang))||v[0]};
+if("speechSynthesis"in window){pickV();speechSynthesis.onvoiceschanged=pickV}
+let mt;function talk(on){clearInterval(mt);if(!on){mouth=null;draw();return}const seq=["mouth_small","mouth_wide","mouth_round","mouth_small"];let i=0;mt=setInterval(()=>{mouth=seq[i++%seq.length];draw()},140)}
+function say(t){if(!speak||!("speechSynthesis"in window))return;speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t.replace(/[*_`#]/g,""));if(vz){u.voice=vz;u.lang=vz.lang}else u.lang="pt-BR";u.onstart=()=>talk(true);u.onend=u.onerror=()=>talk(false);speechSynthesis.speak(u)}
+// chat
+const log=$("#log");
+function add(c,t){const d=document.createElement("div");d.className="m "+c;d.textContent=t;log.append(d);log.scrollTop=log.scrollHeight;return d}
+hist.forEach(m=>add(m.role==="user"?"u":"c",m.content));
+if(!hist.length){add("c","Oi! Eu sou a Capri. Abra Ajustes para ligar a minha mente a uma API e podemos conversar.")}
+async function ask(txt){
+ if(busy)return;busy=true;add("u",txt);hist.push({role:"user",content:txt});
+ if(!S.u||!S.mo){add("e","Falta configurar a API em Ajustes (endereço e modelo).");busy=false;return}
+ setMood("thinking");const w=add("c","…");
+ const sys=S.p+(S.mem.trim()?"\n\nFatos que você sabe sobre o usuário:\n"+S.mem.trim():"");
+ try{
+  const r=await fetch(S.u.replace(/\/+$/,"")+"/chat/completions",{method:"POST",headers:{"Content-Type":"application/json",...(S.k?{Authorization:"Bearer "+S.k}:{})},body:JSON.stringify({model:S.mo,messages:[{role:"system",content:sys},...hist.slice(-20)]})});
+  if(!r.ok)throw new Error(r.status+" "+(await r.text()).slice(0,160));
+  const j=await r.json(),a=(j.choices?.[0]?.message?.content||"").trim()||"(sem resposta)";
+  w.textContent=a;hist.push({role:"assistant",content:a});setMood(moodOf(a));$("#bub").textContent="";say(a);
+ }catch(e){w.remove();hist.pop();add("e","Erro ao falar com a API: "+e.message);setMood("sad")}
+ save();busy=false;log.scrollTop=log.scrollHeight}
+$("#f").onsubmit=e=>{e.preventDefault();const v=$("#t").value.trim();if(!v)return;$("#t").value="";ask(v)};
+$("#t").onkeydown=e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("#f").requestSubmit()}};
+// microfone
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;let rec=null;
+$("#mic").onclick=()=>{if(!SR){add("e","Este navegador não tem reconhecimento de voz. No Android, use o Chrome.");return}
+ if(rec){rec.stop();return}rec=new SR();rec.lang="pt-BR";rec.interimResults=false;speechSynthesis.cancel();talk(false);
+ rec.onstart=()=>{$("#mic").classList.add("on");$("#bub").textContent="Ouvindo…"};
+ rec.onresult=e=>ask(e.results[0][0].transcript);
+ rec.onerror=e=>add("e","Microfone: "+e.error);
+ rec.onend=()=>{rec=null;$("#mic").classList.remove("on");$("#bub").textContent=""};rec.start()};
+const spkUI=()=>{$("#spk").classList.toggle("on",speak);$("#spk").textContent=speak?"Voz ligada":"Voz muda"};
+$("#spk").onclick=()=>{speak=!speak;LS.capri_spk=speak?"1":"0";if(!speak){speechSynthesis.cancel();talk(false)}spkUI()};spkUI();
+// ajustes
+const d=$("#d");
+$("#cfg").onclick=()=>{$("#u").value=S.u||"";$("#k").value=S.k||"";$("#mo").value=S.mo||"";$("#p").value=S.p;$("#mem").value=S.mem;d.showModal()};
+$("#ok").onclick=()=>{Object.assign(S,{u:$("#u").value.trim(),k:$("#k").value.trim(),mo:$("#mo").value.trim(),p:$("#p").value.trim()||PERS,mem:$("#mem").value});save();d.close()};
+$("#clr").onclick=()=>{hist=[];save();log.innerHTML="";d.close();add("c","Conversa limpa. A memória de fatos continua.")};
+d.addEventListener("click",e=>{if(e.target===d)d.close()});
+setMood("attentive");
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+</body>
+</html>
